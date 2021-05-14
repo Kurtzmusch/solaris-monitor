@@ -3,6 +3,7 @@ import requests
 import getpass
 import json
 import time
+import os
 
 apiURL = 'https://api.solaris.games'
 loginURL = '/api/auth/login'
@@ -12,6 +13,8 @@ headers = {
         'Sec-Fetch-Mode': 'cors',
         'Origin': 'https://solaris.games'
 }
+games = []
+trackingGamesIndexes = []
 
 def main():
     cookie = getCookie()
@@ -20,10 +23,12 @@ def main():
         if cookie is None:
             print('failed to log in')
             return
-    games = getActiveGames(cookie)
-    printGames(games)
+    getActiveGames(cookie)
+    clearTerminal()
     while(True):
-        time.sleep(2)
+        draw()
+        command = input('command: ')
+        processCommand(command)
 
 def getCookie():
     cookie = None
@@ -64,21 +69,35 @@ def getActiveGames(authCookie):
         print('failed, try reseting the cookie')
         exit()
     responseOBJ = json.loads(response.text)
-    games = []
+    i = 0
     for responseGame in responseOBJ:
         game = {}
         game['name'] = responseGame['settings']['general']['name']
         game['id'] = responseGame['_id']
         games.append(game)
-    return games
-
-def printGames(games):
-    i = 0
-    for game in games:
-        print(str(i) + ' - '+game['name'])
+        trackingGamesIndexes.append(i)
         i+=1
 
+def printTrackingGames():
+    for index in trackingGamesIndexes:
+        print( str(index) + ' - '+games[index]['name'] )
 
+def printEmptyLines(lineCount):
+    for i in range(0,lineCount):
+        print()
+
+def clearTerminal():
+    rows, columns = os.popen('stty size', 'r').read().split()
+    printEmptyLines(int(rows))
+
+def draw():
+    rows, columns = os.popen('stty size', 'r').read().split()
+    lineCount = int(rows)-len(trackingGamesIndexes)-1
+    printTrackingGames()
+    printEmptyLines(lineCount)
+
+def processCommand(commandString):
+    pass
 
 
 
