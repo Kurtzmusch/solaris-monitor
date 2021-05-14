@@ -1,0 +1,85 @@
+#!/usr/bin/python3.6
+import requests
+import getpass
+import json
+import time
+
+apiURL = 'https://api.solaris.games'
+loginURL = '/api/auth/login'
+activeGamesURL = '/api/game/list/active'
+headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'Sec-Fetch-Mode': 'cors',
+        'Origin': 'https://solaris.games'
+}
+
+def main():
+    cookie = getCookie()
+    if cookie is  None:
+        cookie = login()
+        if cookie is None:
+            print('failed to log in')
+            return
+    games = getActiveGames(cookie)
+    printGames(games)
+    while(True):
+        time.sleep(2)
+
+def getCookie():
+    cookie = None
+    try:
+        cookieFile = open('solaris-cookie.cookie', 'r')
+        cookie = cookieFile.read()
+        cookieFile.close()
+    except IOError:
+        print('no auth cookie found, login required')
+        cookieFile.close()
+    finally:
+        return cookie
+
+def login():
+    email = input('email: ')
+    password = getpass.getpass()
+    payload = '{"email": "'+email+'", "password": "'+password+'"}'
+    payload = payload.encode('utf-8')
+
+    url = apiURL+loginURL
+    response = requests.post(url, data=payload, headers=headers)
+    responseCookies = response.cookies.get_dict()
+    if( 'connect.sid' in responseCookies ):
+        authCookie = responseCookies['connect.sid']
+        cookieFile = open('solaris-cookie.cookie', 'w')
+        cookieFile.write( authCookie )
+        cookieFile.close()
+        print('connected')
+        return authCookie
+    else:
+        return None
+def getActiveGames(authCookie):
+    authHeaders = headers.copy()
+    authHeaders['Cookie'] = 'connect.sid='+authCookie
+    url = apiURL+activeGamesURL
+    response = requests.get(url, headers=authHeaders)
+    if response.status_code != 200:
+        print('failed, try reseting the cookie')
+        exit()
+    responseOBJ = json.loads(response.text)
+    games = []
+    for responseGame in responseOBJ:
+        game = {}
+        game['name'] = responseGame['settings']['general']['name']
+        game['id'] = responseGame['_id']
+        games.append(game)
+    return games
+
+def printGames(games):
+    i = 0
+    for game in games:
+        print(str(i) + ' - '+game['name'])
+        i+=1
+
+
+
+
+
+main()
