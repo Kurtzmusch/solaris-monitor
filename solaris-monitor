@@ -1,4 +1,5 @@
 #!/usr/bin/python3.6
+from playsound import playsound
 import requests
 import getpass
 import json
@@ -218,6 +219,7 @@ def cleanUpNewAttacks():
         game['new-attacks'] = cleanedNewAttacks
 
 def collectAttacks():
+    newAttacks = False
     for game in games:
         for fetchedAttack in game['fetched-attacks']:
             alreadyAware = False
@@ -227,8 +229,11 @@ def collectAttacks():
                     break
             if not alreadyAware:
                 game['new-attacks'].append(fetchedAttack)
+                newAttacks = True
         game['total-attacks'] = game['fetched-attacks']
         game['fetched-attacks'] = []
+    if newAttacks:
+        playsound('./download.mp3')
 
 
 def updateLoop():
@@ -249,7 +254,8 @@ def quit():
     exit()
 
 commands = {
-        'quit': quit
+        'quit': quit,
+        'exit': quit
 }
 
 main()
