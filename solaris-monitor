@@ -23,6 +23,12 @@ games = []
 mainLock = threading.Lock()
 terminate = False
 ownPlayerID = ''
+idString = 'id   '
+totalString = ' total'
+newString = ' new'
+tickDurationString = ' tick-duration'
+nextTickString = ' next-tick'
+partialLength = len(idString)+len(totalString)+len(newString)+len(tickDurationString)+len(nextTickString)
 
 def main():
     
@@ -140,20 +146,23 @@ def printGames():
         tickDuration = game['tick-duration']
         if 'lastTickTimestamp' in game:
             nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
+            nextTick = str(nextTick)+'m'
         else:
             nextTick = 'paused'
     
-        print( str(index) + ' - '+game['name'] .ljust(64-14,' ')+str(tickDuration)+'m    '+str(nextTick)+'m    '+str(game['attacks']) )
+        print( 
+                str(index).ljust(5,' ')+
+                game['name'].ljust(80-partialLength,' ')
+                +(str(tickDuration)+'m').rjust(len(tickDurationString),' ')
+                +nextTick.rjust(len(nextTickString),' ')
+                +(str(game['attacks'])).rjust(len(totalString), ' ')
+        )
         index += 1
 
 def printGamesHeader():
     rows, columns = os.popen('stty size', 'r').read().split()
-    idString = 'id   '
-    nameString = 'name                                                 '
-    totalString = 'total   '
-    newString = 'new'
-    tickDurationString = 'tick-duration   '
-    nextTickString = 'next-tick   '
+    totalLength = 80
+    nameString = 'name'.ljust(totalLength-partialLength, ' ')
     print(idString+nameString+tickDurationString+nextTickString+totalString+newString)
 
 def printEmptyLines(lineCount):
