@@ -4,6 +4,8 @@ import getpass
 import json
 import time
 import os
+import threading
+from threading import Thread
 
 apiURL = 'https://api.solaris.games'
 loginURL = '/api/auth/login'
@@ -15,8 +17,11 @@ headers = {
 }
 games = []
 trackingGamesIndexes = []
+mainLock = threading.Lock()
+terminate = False
 
 def main():
+    
     cookie = getCookie()
     if cookie is  None:
         cookie = login()
@@ -24,11 +29,15 @@ def main():
             print('failed to log in')
             return
     getActiveGames(cookie)
+    initUpdaterThread()
     clearTerminal()
     while(True):
         draw()
-        command = input('command: ')
-        processCommand(command)
+        getpass.getpass('')
+        with mainLock:
+            command = input('command: ')
+            print('')
+            processCommand(command)
 
 def getCookie():
     cookie = None
@@ -60,6 +69,7 @@ def login():
         return authCookie
     else:
         return None
+
 def getActiveGames(authCookie):
     authHeaders = headers.copy()
     authHeaders['Cookie'] = 'connect.sid='+authCookie
@@ -92,13 +102,34 @@ def clearTerminal():
 
 def draw():
     rows, columns = os.popen('stty size', 'r').read().split()
-    lineCount = int(rows)-len(trackingGamesIndexes)-1
+    lineCount = int(rows)-len(trackingGamesIndexes)-2
     printTrackingGames()
     printEmptyLines(lineCount)
 
 def processCommand(commandString):
-    pass
+    for commandName, commandFunction in commands.items():
+        if(commandString == commandName):
+            commandFunction()
+            break
 
+def updateLoop():
+    global terminate
+    while(not terminate):
+        time.sleep(1.0)
+        with mainLock:
+            draw()
 
+def initUpdaterThread():
+    updaterThread = Thread(target=updateLoop)
+    updaterThread.start()
+
+def quit():
+    global terminate
+    terminate = True
+    exit()
+
+commands = {
+        'quit': quit
+}
 
 main()
