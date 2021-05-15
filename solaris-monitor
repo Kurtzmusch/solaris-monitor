@@ -40,10 +40,10 @@ def main():
             return
     getActiveGames(cookie)
     getGalaxyes(cookie)
-    computeAttacks()
-    initUpdaterThread()
+    updateAttacks()
     clearTerminal()
     drawMonitor()
+    initUpdaterThread()
     while(True):
         getpass.getpass('')
         with mainLock:
@@ -95,15 +95,16 @@ def getActiveGames(authCookie):
         game = {}
         game['name'] = responseGame['settings']['general']['name']
         game['id'] = responseGame['_id']
-        game['tracking'] = True
-        game['enemy-carriers'] = []
-        game['owned-stars'] = []
-        game['attacks'] = 0
+        game['fetched-attacks'] = []
+        game['total-attacks'] = []
+        game['new-attacks'] = []
         games.append(game)
 
 def getGalaxyes(authCookie):
     #TODO ignore games that didnt start yet
     for game in games:
+        game['enemy-carriers'] = []
+        game['owned-stars'] = []
         getGalaxy(game['id'], authCookie, game)
 
 def getGalaxy(gameID, authCookie, game):
@@ -149,13 +150,16 @@ def printGames():
             nextTick = str(nextTick)+'m'
         else:
             nextTick = 'paused'
-    
+
+        totalCount = len(game['total-attacks'])
+        newCount = len(game['new-attacks'])
         print( 
                 str(index).ljust(5,' ')+
                 game['name'].ljust(80-partialLength,' ')
                 +(str(tickDuration)+'m').rjust(len(tickDurationString),' ')
                 +nextTick.rjust(len(nextTickString),' ')
-                +(str(game['attacks'])).rjust(len(totalString), ' ')
+                +(str(totalCount)).rjust(len(totalString), ' ')
+                +(str(newCount)).rjust(len(newString), ' ')
         )
         index += 1
 
@@ -186,20 +190,52 @@ def processCommand(commandString):
             return
     drawMonitor()
 
+def updateAttacks():
+    computeAttacks()
+    collectAttacks()
+    cleanUpNewAttacks()
+
 def computeAttacks():
     for game in games:
         for carrier in game['enemy-carriers']:
             if 'waypoints' in carrier:
-                for starID in game['owned-stars']:
-                    if len(carrier['waypoints'])>0:
+                if len(carrier['waypoints'])>0:
+                    for starID in game['owned-stars']:
                         if carrier['waypoints'][0]['destination'] == starID:
-                            game['attacks']+=1
-        print(game['attacks'])
+                            game['fetched-attacks'].append({'id': (carrier['_id']+starID)} )
+
+def cleanUpNewAttacks():
+    for game in games:
+        cleanedNewAttacks = []
+        for attack in game['new-attacks']:
+            exists = False
+            for totalAttack in game['total-attacks']:
+                if attack['id'] == totalAttack['id']:
+                    exists = True
+                    break
+            if exists:
+                cleanedNewAttacks.append(totalAttack)
+        game['new-attacks'] = cleanedNewAttacks
+
+def collectAttacks():
+    for game in games:
+        for fetchedAttack in game['fetched-attacks']:
+            alreadyAware = False
+            for attack in game['total-attacks']:
+                if (attack['id'] == fetchedAttack['id']):
+                    alreadyAware = True
+                    break
+            if not alreadyAware:
+                game['new-attacks'].append(fetchedAttack)
+        game['total-attacks'] = game['fetched-attacks']
+        game['fetched-attacks'] = []
+
 
 def updateLoop():
     global terminate
     while(not terminate):
         time.sleep(1.0)
+        #TODO check if any games need update, if so: get lock, updateAttacks(), redraw
         with mainLock:
             drawMonitor()
 
