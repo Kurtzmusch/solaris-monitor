@@ -9,6 +9,7 @@ from threading import Thread
 
 apiURL = 'https://api.solaris.games'
 loginURL = '/api/auth/login'
+gameURL = '/api/game/'
 activeGamesURL = '/api/game/list/active'
 headers = {
         'Content-Type': 'application/json;charset=UTF-8',
@@ -18,6 +19,7 @@ headers = {
 games = []
 mainLock = threading.Lock()
 terminate = False
+ownPlayerID = ''
 
 def main():
     
@@ -28,6 +30,8 @@ def main():
             print('failed to log in')
             return
     getActiveGames(cookie)
+    getGalaxyes(cookie)
+    computeAttacks()
     initUpdaterThread()
     clearTerminal()
     drawMonitor()
@@ -83,13 +87,54 @@ def getActiveGames(authCookie):
         game['name'] = responseGame['settings']['general']['name']
         game['id'] = responseGame['_id']
         game['tracking'] = True
+        game['enemy-carriers'] = []
+        game['owned-stars'] = []
+        game['attacks'] = 0
         games.append(game)
 
+def getGalaxyes(authCookie):
+    for game in games:
+        getGalaxy(game['id'], authCookie, game)
+
+def getGalaxy(gameID, authCookie, game):
+    authHeaders = headers.copy()
+    authHeaders['Cookie'] = 'connect.sid='+authCookie
+    url = apiURL+gameURL+gameID+'/galaxy'
+    print(url)
+    response = requests.get(url, headers=authHeaders)
+    if response.status_code != 200:
+        print('failed, try reseting the cookie')
+        exit()
+    responseOBJ = json.loads(response.text)
+    found = False
+    for player in responseOBJ['galaxy']['players']:
+        if( 'userId' in player ):
+            ownPlayerID = player['_id']
+            print(player['alias'])
+            break
+
+    for carrier in responseOBJ['galaxy']['carriers']:
+        if carrier['ownedByPlayerId'] != ownPlayerID:
+            game['enemy-carriers'].append(carrier)
+
+    for star in responseOBJ['galaxy']['stars']:
+        if( star['ownedByPlayerId'] == ownPlayerID ):
+            game['owned-stars'].append(star['_id'])
+
 def printGames():
+    printGamesHeader()
     index = 0
     for game in games:
-        print( str(index) + ' - '+game['name'] )
+        print( str(index) + ' - '+game['name'] .ljust(64-14,' ')+str(game['attacks']) )
         index += 1
+
+def printGamesHeader():
+    rows, columns = os.popen('stty size', 'r').read().split()
+    idString = 'id   '
+    nameString = 'name                                                 '
+    totalString = 'total   '
+    newString = 'new'
+    print(idString+nameString+totalString+newString)
 
 def printEmptyLines(lineCount):
     for i in range(0,lineCount):
@@ -101,7 +146,7 @@ def clearTerminal():
 
 def drawMonitor():
     rows, columns = os.popen('stty size', 'r').read().split()
-    lineCount = int(rows)-len(games)-2
+    lineCount = int(rows)-len(games)-3
     printGames()
     printEmptyLines(lineCount)
 
@@ -111,6 +156,16 @@ def processCommand(commandString):
             commandFunction()
             return
     drawMonitor()
+
+def computeAttacks():
+    for game in games:
+        for carrier in game['enemy-carriers']:
+            if 'waypoints' in carrier:
+                for starID in game['owned-stars']:
+                    if len(carrier['waypoints'])>0:
+                        if carrier['waypoints'][0]['destination'] == starID:
+                            game['attacks']+=1
+        print(game['attacks'])
 
 def updateLoop():
     global terminate
