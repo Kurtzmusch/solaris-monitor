@@ -16,7 +16,6 @@ headers = {
         'Origin': 'https://solaris.games'
 }
 games = []
-trackingGamesIndexes = []
 mainLock = threading.Lock()
 terminate = False
 
@@ -31,8 +30,8 @@ def main():
     getActiveGames(cookie)
     initUpdaterThread()
     clearTerminal()
+    drawMonitor()
     while(True):
-        draw()
         getpass.getpass('')
         with mainLock:
             command = input('command: ')
@@ -79,18 +78,18 @@ def getActiveGames(authCookie):
         print('failed, try reseting the cookie')
         exit()
     responseOBJ = json.loads(response.text)
-    i = 0
     for responseGame in responseOBJ:
         game = {}
         game['name'] = responseGame['settings']['general']['name']
         game['id'] = responseGame['_id']
+        game['tracking'] = True
         games.append(game)
-        trackingGamesIndexes.append(i)
-        i+=1
 
-def printTrackingGames():
-    for index in trackingGamesIndexes:
-        print( str(index) + ' - '+games[index]['name'] )
+def printGames():
+    index = 0
+    for game in games:
+        print( str(index) + ' - '+game['name'] )
+        index += 1
 
 def printEmptyLines(lineCount):
     for i in range(0,lineCount):
@@ -100,24 +99,25 @@ def clearTerminal():
     rows, columns = os.popen('stty size', 'r').read().split()
     printEmptyLines(int(rows))
 
-def draw():
+def drawMonitor():
     rows, columns = os.popen('stty size', 'r').read().split()
-    lineCount = int(rows)-len(trackingGamesIndexes)-2
-    printTrackingGames()
+    lineCount = int(rows)-len(games)-2
+    printGames()
     printEmptyLines(lineCount)
 
 def processCommand(commandString):
     for commandName, commandFunction in commands.items():
         if(commandString == commandName):
             commandFunction()
-            break
+            return
+    drawMonitor()
 
 def updateLoop():
     global terminate
     while(not terminate):
         time.sleep(1.0)
         with mainLock:
-            draw()
+            drawMonitor()
 
 def initUpdaterThread():
     updaterThread = Thread(target=updateLoop)
