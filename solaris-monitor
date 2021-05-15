@@ -5,7 +5,10 @@ import json
 import time
 import os
 import threading
+import datetime
+from datetime import timezone
 from threading import Thread
+
 
 apiURL = 'https://api.solaris.games'
 loginURL = '/api/auth/login'
@@ -93,6 +96,7 @@ def getActiveGames(authCookie):
         games.append(game)
 
 def getGalaxyes(authCookie):
+    #TODO ignore games that didnt start yet
     for game in games:
         getGalaxy(game['id'], authCookie, game)
 
@@ -121,11 +125,25 @@ def getGalaxy(gameID, authCookie, game):
         if( star['ownedByPlayerId'] == ownPlayerID ):
             game['owned-stars'].append(star['_id'])
 
+    game['tick-duration'] = responseOBJ['settings']['gameTime']['speed']
+    if 'lastTickDate' in responseOBJ['state']:
+        treatedDateString = responseOBJ['state']['lastTickDate']
+        treatedDateString = treatedDateString[:-5]
+        lastTickDate = datetime.datetime.strptime(treatedDateString, '%Y-%m-%dT%H:%M:%S')
+        game['lastTickTimestamp'] = lastTickDate.timestamp()
+
 def printGames():
     printGamesHeader()
     index = 0
+    nowDate = datetime.datetime.utcnow().timestamp()
     for game in games:
-        print( str(index) + ' - '+game['name'] .ljust(64-14,' ')+str(game['attacks']) )
+        tickDuration = game['tick-duration']
+        if 'lastTickTimestamp' in game:
+            nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
+        else:
+            nextTick = 'paused'
+    
+        print( str(index) + ' - '+game['name'] .ljust(64-14,' ')+str(tickDuration)+'m    '+str(nextTick)+'m    '+str(game['attacks']) )
         index += 1
 
 def printGamesHeader():
@@ -134,7 +152,9 @@ def printGamesHeader():
     nameString = 'name                                                 '
     totalString = 'total   '
     newString = 'new'
-    print(idString+nameString+totalString+newString)
+    tickDurationString = 'tick-duration   '
+    nextTickString = 'next-tick   '
+    print(idString+nameString+tickDurationString+nextTickString+totalString+newString)
 
 def printEmptyLines(lineCount):
     for i in range(0,lineCount):
