@@ -191,9 +191,11 @@ def drawMonitor():
     printEmptyLines(lineCount)
 
 def processCommand(commandString):
+    splitCommand = commandString.split(' ', 1)
+    command = splitCommand[0]
     for commandName, commandFunction in commands.items():
-        if(commandString == commandName):
-            commandFunction()
+        if(command == commandName):
+            commandFunction(splitCommand)
             return
     drawMonitor()
 
@@ -252,8 +254,7 @@ def updateLoop():
                     nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
                     game['next-tick'] = nextTick
                     if game['next-tick'] < 0:
-                        gameID = game['id']
-                        getGalaxy(gameID)
+                        getGalaxy(game)
                         updateAttacks(game)
             drawMonitor()
 
@@ -261,13 +262,31 @@ def initUpdaterThread():
     updaterThread = Thread(target=updateLoop)
     updaterThread.start()
 
-def quit():
+def quit(args):
     global terminate
     terminate = True
 
+def dismiss(args):
+    if len(args)<2:
+        return
+    if len(args[1]) == 0:
+        return
+    if not args[1].isnumeric():
+        return
+    argID = int(args[1])
+    if argID>=len(games):
+        return
+    
+    dismissGame = games[argID]
+    dismissGame['new-attacks'] = []
+    drawMonitor()
+
 commands = {
         'quit': quit,
-        'exit': quit
+        'q': quit,
+        'exit': quit,
+        'dismiss': dismiss,
+        'd': dismiss
 }
 
 main()
