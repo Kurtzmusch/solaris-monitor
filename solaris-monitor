@@ -30,6 +30,7 @@ newString = ' new'
 tickDurationString = ' tick-duration'
 nextTickString = ' next-tick'
 partialLength = len(idString)+len(totalString)+len(newString)+len(tickDurationString)+len(nextTickString)
+authCookie = ''
 
 def main():
     
@@ -39,9 +40,12 @@ def main():
         if cookie is None:
             print('failed to log in')
             return
-    getActiveGames(cookie)
-    getGalaxyes(cookie)
-    updateAttacks()
+    global authCookie
+    authCookie = cookie
+    getActiveGames()
+    getGalaxyes()
+    for game in games:
+        updateAttacks(game, True)
     clearTerminal()
     drawMonitor()
     initUpdaterThread()
@@ -83,7 +87,7 @@ def login():
     else:
         return None
 
-def getActiveGames(authCookie):
+def getActiveGames():
     authHeaders = headers.copy()
     authHeaders['Cookie'] = 'connect.sid='+authCookie
     url = apiURL+activeGamesURL
@@ -101,18 +105,19 @@ def getActiveGames(authCookie):
         game['new-attacks'] = []
         games.append(game)
 
-def getGalaxyes(authCookie):
+def getGalaxyes():
     #TODO ignore games that didnt start yet
     for game in games:
-        game['enemy-carriers'] = []
-        game['owned-stars'] = []
-        getGalaxy(game['id'], authCookie, game)
+        getGalaxy(game)
 
-def getGalaxy(gameID, authCookie, game):
+def getGalaxy(game):
+    gameID = game['id']
+    game['enemy-carriers'] = []
+    game['owned-stars'] = []
     authHeaders = headers.copy()
     authHeaders['Cookie'] = 'connect.sid='+authCookie
     url = apiURL+gameURL+gameID+'/galaxy'
-    print(url)
+    print(game['name'])
     response = requests.get(url, headers=authHeaders)
     if response.status_code != 200:
         print('failed, try reseting the cookie')
@@ -134,26 +139,27 @@ def getGalaxy(gameID, authCookie, game):
             game['owned-stars'].append(star['_id'])
 
     game['tick-duration'] = responseOBJ['settings']['gameTime']['speed']
+    tickDuration = game['tick-duration']
     if 'lastTickDate' in responseOBJ['state']:
         treatedDateString = responseOBJ['state']['lastTickDate']
         treatedDateString = treatedDateString[:-5]
         lastTickDate = datetime.datetime.strptime(treatedDateString, '%Y-%m-%dT%H:%M:%S')
         game['lastTickTimestamp'] = lastTickDate.timestamp()
+        nowDate = datetime.datetime.utcnow().timestamp()
+        nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
+        game['nex-tick'] = nextTick
 
 def printGames():
     printGamesHeader()
     index = 0
-    nowDate = datetime.datetime.utcnow().timestamp()
     for game in games:
-        tickDuration = game['tick-duration']
-        if 'lastTickTimestamp' in game:
-            nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
-            nextTick = str(nextTick)+'m'
-        else:
-            nextTick = 'paused'
-
         totalCount = len(game['total-attacks'])
         newCount = len(game['new-attacks'])
+        if  'next-tick' in game:
+            nextTick = str(game['next-tick'])+'m'
+        else:
+            nextTick = 'paused'
+        tickDuration = str(game['tick-duration'])
         print( 
                 str(index).ljust(5,' ')+
                 game['name'].ljust(80-partialLength,' ')
@@ -191,57 +197,64 @@ def processCommand(commandString):
             return
     drawMonitor()
 
-def updateAttacks():
-    computeAttacks()
-    collectAttacks()
-    cleanUpNewAttacks()
+def updateAttacks(game, mute=False):
+    computeAttacks(game)
+    collectAttacks(game, mute)
+    cleanUpNewAttacks(game)
 
-def computeAttacks():
-    for game in games:
-        for carrier in game['enemy-carriers']:
-            if 'waypoints' in carrier:
-                if len(carrier['waypoints'])>0:
-                    for starID in game['owned-stars']:
-                        if carrier['waypoints'][0]['destination'] == starID:
-                            game['fetched-attacks'].append({'id': (carrier['_id']+starID)} )
+def computeAttacks(game):
+    for carrier in game['enemy-carriers']:
+        if 'waypoints' in carrier:
+            if len(carrier['waypoints'])>0:
+                for starID in game['owned-stars']:
+                    if carrier['waypoints'][0]['destination'] == starID:
+                        game['fetched-attacks'].append({'id': (carrier['_id']+starID)} )
 
-def cleanUpNewAttacks():
-    for game in games:
-        cleanedNewAttacks = []
-        for attack in game['new-attacks']:
-            exists = False
-            for totalAttack in game['total-attacks']:
-                if attack['id'] == totalAttack['id']:
-                    exists = True
-                    break
-            if exists:
-                cleanedNewAttacks.append(totalAttack)
-        game['new-attacks'] = cleanedNewAttacks
+def cleanUpNewAttacks(game):
+    cleanedNewAttacks = []
+    for attack in game['new-attacks']:
+        exists = False
+        for totalAttack in game['total-attacks']:
+            if attack['id'] == totalAttack['id']:
+                exists = True
+                break
+        if exists:
+            cleanedNewAttacks.append(totalAttack)
+    game['new-attacks'] = cleanedNewAttacks
 
-def collectAttacks():
+def collectAttacks(game, mute=False):
     newAttacks = False
-    for game in games:
-        for fetchedAttack in game['fetched-attacks']:
-            alreadyAware = False
-            for attack in game['total-attacks']:
-                if (attack['id'] == fetchedAttack['id']):
-                    alreadyAware = True
-                    break
-            if not alreadyAware:
-                game['new-attacks'].append(fetchedAttack)
-                newAttacks = True
-        game['total-attacks'] = game['fetched-attacks']
-        game['fetched-attacks'] = []
+    for fetchedAttack in game['fetched-attacks']:
+        alreadyAware = False
+        for attack in game['total-attacks']:
+            if (attack['id'] == fetchedAttack['id']):
+                alreadyAware = True
+                break
+        if not alreadyAware:
+            game['new-attacks'].append(fetchedAttack)
+            newAttacks = True
+    game['total-attacks'] = game['fetched-attacks']
+    game['fetched-attacks'] = []
     if newAttacks:
-        playsound('./dialog_open.mp3')
+        if not mute:
+            playsound('./dialog_open.mp3')
 
 
 def updateLoop():
     global terminate
     while(not terminate):
         time.sleep(1.0) #TODO a sleeping loop is probaly not ideal, better to use other threading methods like notify()
-        #TODO check if any games need update, if so: get lock, updateAttacks(), redraw
         with mainLock:
+            nowDate = datetime.datetime.utcnow().timestamp()
+            for game in games:
+                tickDuration = game['tick-duration']
+                if 'lastTickTimestamp' in game:
+                    nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
+                    game['next-tick'] = nextTick
+                    if game['next-tick'] < 0:
+                        gameID = game['id']
+                        getGalaxy(gameID)
+                        updateAttacks(game)
             drawMonitor()
 
 def initUpdaterThread():
