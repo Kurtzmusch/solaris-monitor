@@ -45,7 +45,7 @@ def main():
     clearTerminal()
     drawMonitor()
     initUpdaterThread()
-    while(True):
+    while(not terminate):
         getpass.getpass('')
         with mainLock:
             command = input('command: ')
@@ -233,13 +233,13 @@ def collectAttacks():
         game['total-attacks'] = game['fetched-attacks']
         game['fetched-attacks'] = []
     if newAttacks:
-        playsound('./download.mp3')
+        playsound('./dialog_open.mp3')
 
 
 def updateLoop():
     global terminate
     while(not terminate):
-        time.sleep(1.0)
+        time.sleep(1.0) #TODO a sleeping loop is probaly not ideal, better to use other threading methods like notify()
         #TODO check if any games need update, if so: get lock, updateAttacks(), redraw
         with mainLock:
             drawMonitor()
@@ -251,7 +251,6 @@ def initUpdaterThread():
 def quit():
     global terminate
     terminate = True
-    exit()
 
 commands = {
         'quit': quit,
