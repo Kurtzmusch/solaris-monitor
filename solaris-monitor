@@ -25,10 +25,10 @@ mainLock = threading.Lock()
 terminate = False
 ownPlayerID = ''
 idString = 'id   '
-totalString = ' total'
-newString = ' new'
-tickDurationString = ' tick-duration'
-nextTickString = ' next-tick'
+totalString = '  total'
+newString = '  new'
+tickDurationString = '  tick-duration'
+nextTickString = '  next-tick'
 partialLength = len(idString)+len(totalString)+len(newString)+len(tickDurationString)+len(nextTickString)
 authCookie = ''
 
