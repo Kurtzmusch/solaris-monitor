@@ -45,6 +45,8 @@ def main():
     getActiveGames()
     getGalaxyes()
     for game in games:
+        if game['time-type'] == 'turnBased':
+            continue
         updateAttacks(game, True)
     clearTerminal()
     drawMonitor()
@@ -105,12 +107,26 @@ def getActiveGames():
         game['new-attacks'] = []
         games.append(game)
 
+
+    for game in games:
+        url = apiURL+gameURL+game['id']+'/info'
+        response = requests.get(url, headers=authHeaders)
+        if response.status_code != 200:
+            print('failed')
+            exit()
+        responseOBJ = json.loads(response.text)
+        game['time-type'] = responseOBJ['settings']['gameTime']['gameType']
+
 def getGalaxyes():
     #TODO ignore games that didnt start yet
     for game in games:
+        if game['time-type'] == 'turnBased':
+            continue
+
         getGalaxy(game)
 
 def getGalaxy(game):
+    #TODO ignore TB games exept for mail
     gameID = game['id']
     game['enemy-carriers'] = []
     game['owned-stars'] = []
@@ -151,8 +167,16 @@ def getGalaxy(game):
 
 def printGames():
     printGamesHeader()
-    index = 0
+    index = -1
     for game in games:
+        index += 1
+        if game['time-type'] == 'turnBased':
+            print( 
+                str(index).ljust(5,' ')+
+                game['name'].ljust(80-partialLength,' ')
+            )
+            continue
+
         totalCount = len(game['total-attacks'])
         newCount = len(game['new-attacks'])
         if  'next-tick' in game:
@@ -168,7 +192,6 @@ def printGames():
                 +(str(totalCount)).rjust(len(totalString), ' ')
                 +(str(newCount)).rjust(len(newString), ' ')
         )
-        index += 1
 
 def printGamesHeader():
     rows, columns = os.popen('stty size', 'r').read().split()
@@ -249,6 +272,8 @@ def updateLoop():
         with mainLock:
             nowDate = datetime.datetime.utcnow().timestamp()
             for game in games:
+                if game['time-type'] == 'turnBased':
+                    continue
                 tickDuration = game['tick-duration']
                 if 'lastTickTimestamp' in game:
                     nextTick = tickDuration - int((nowDate-game['lastTickTimestamp'])/60.0)
